@@ -13,6 +13,7 @@ The application is designed as an alternative to online PDF manipulation tools, 
     - Add, update, and remove metadata.
     - Pagination for the PDFs
     - Convert images to PDF and vice versa (optional).
+    - Compress PDFs
 
 - **User Interface (UI):**
     - Intuitive and responsive design suitable for all users.
