@@ -11,7 +11,7 @@ The application is designed as an alternative to online PDF manipulation tools, 
     - Rotate, reorder, and delete pages within a PDF.
     - Encrypt and decrypt PDF files.
     - Add, update, and remove metadata.
-    - Fill PDF forms and save inputs.
+    - Pagination for the PDFs
     - Convert images to PDF and vice versa (optional).
 
 - **User Interface (UI):**
