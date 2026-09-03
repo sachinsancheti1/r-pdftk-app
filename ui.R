@@ -91,6 +91,14 @@ vitrag_theme <- function() {
           font-family: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif;
           color: var(--vblue);
           background: #ffffff;
+          font-size: 15px;
+        }
+        /* Bootstrap's default <small>/.help-block shrink to ~85% of a
+           14px base (~12px) reads as genuinely too small once the base
+           itself is 15px - fixed to a real, comfortable size instead of
+           a relative shrink. */
+        small, .help-block {
+          font-size: 13px;
         }
         h1, h2, h3, h4, h5, legend {
           font-family: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif;
@@ -113,7 +121,8 @@ vitrag_theme <- function() {
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.03em;
-          font-size: 13px;
+          font-size: 15px;
+          padding: 12px 18px;
           color: var(--vblue);
           border-radius: 0;
           border: none;
@@ -146,12 +155,15 @@ vitrag_theme <- function() {
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.03em;
-          font-size: 12px;
+          font-size: 14px;
           color: var(--vblue);
         }
         .form-control {
           border-radius: 0;
           border: 1px solid #c7ccd6;
+          font-size: 15px;
+          height: auto;
+          padding: 8px 12px;
         }
         .form-control:focus {
           border-color: var(--vgreen);
@@ -168,8 +180,8 @@ vitrag_theme <- function() {
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.03em;
-          font-size: 13px;
-          padding: 8px 20px;
+          font-size: 15px;
+          padding: 10px 24px;
           transition: all 0.15s ease;
         }
         .btn:hover, .btn-default:hover, .btn-primary:hover {
