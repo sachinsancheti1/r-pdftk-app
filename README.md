@@ -1,100 +1,31 @@
-# Specifications for PDFTK Application
+# r-pdftk-app
 
-## Overview
-The application is designed as an alternative to online PDF manipulation tools, offering a secure, efficient, and user-friendly platform for handling PDF files. Leveraging PDFTK (PDF Toolkit), it provides various functionalities without the need to upload files to a server, ensuring data privacy and security.
+Shiny app: merge, extract/delete pages, rotate, compress, encrypt/decrypt, and edit metadata on PDFs — all processed on this server, nothing sent to a third-party PDF site. Started from a generic product spec (`pdftk application.md`, since superseded by this README) describing a much larger cross-platform/public-product scope (Electron desktop, mobile apps, localization, WCAG compliance, community support); this build is deliberately scoped to a private tool for personal/internal use instead, matching `r-contour-analysis`/`r-paint-selection`/`RmdFormatsHub`.
 
-## Functional Requirements
+## Architecture: hybrid `qpdf` + `pdftk`, not just "shell out to pdftk"
 
-- **PDF Manipulation Capabilities:**
-    - Merge multiple PDF files into one document.
-    - Split a single PDF into multiple documents.
-    - Rotate, reorder, and delete pages within a PDF.
-    - Encrypt and decrypt PDF files.
-    - Add, update, and remove metadata.
-    - Pagination for the PDFs
-    - Convert images to PDF and vice versa (optional).
-    - Compress PDFs
+Despite the app's name, most operations do **not** shell out to the `pdftk` CLI. Researched what's actually available in R before defaulting to a subprocess call:
 
-- **User Interface (UI):**
-    - Intuitive and responsive design suitable for all users.
-    - Drag-and-drop functionality for file selection.
-    - Real-time preview of PDF files.
-    - Progress indicators for ongoing tasks.
+- **`qpdf`** (CRAN, binds directly to `libqpdf` via Rcpp — no subprocess, no JVM) handles **Merge, Extract/Delete pages, Rotate, and Compress** (`pdf_combine`/`pdf_subset`/`pdf_rotate_pages`/`pdf_compress`). Confirmed against the package's complete function reference (`pdf_length`, `pdf_split`, `pdf_subset`, `pdf_combine`, `pdf_compress`, `pdf_overlay_stamp`, `pdf_rotate_pages` — nothing else exists) that it has **no encryption and no metadata support at all**.
+- **`pdftools`** (already a near-universal R PDF dependency) provides page counts (`pdf_length` — actually via `qpdf::pdf_length`, `pdftools` used for `pdf_info()`) and metadata **reading** (`pdf_info(path)$keys$Title` etc.) — no subprocess needed for this either.
+- **`pdftk` (CLI, shelled via `system2()`)** is used only for **Encrypt/Decrypt** and **metadata writing** — the two things neither `qpdf` nor `pdftools` can do. Checked whether `xmpdf` (an R package that looked like it might fill this gap natively) was a better option first — its own `SystemRequirements` say it just shells out to `exiftool`/`ghostscript`/`pdftk` under the hood anyway, so it wouldn't have actually removed the dependency, just added another wrapper package on top of it.
 
-- **Compatibility:**
-    - Cross-platform support (Windows, macOS, Linux).
-    - <s>Mobile version for iOS and Android (optional).</s>
+On Ubuntu/Debian, classic `pdftk` was dropped from the repos — `pdftk-java` (a command-line-compatible Java port) is what's actually installed, needing `default-jre-headless`. The `pdftk` command name and argument syntax are unchanged, so the R code calling `system2("pdftk", ...)` didn't need to know or care about this.
 
-- **Localization:**
-    - Multi-language support to cater to a global user base.
+All 12 core operations (merge, parse-page-range edge cases, extract, delete-via-inverse-selection, rotate, compress, encrypt, decrypt with a correct password, decrypt correctly *rejecting* a wrong password, metadata write-then-read round-trip) were verified locally against a real generated test PDF before deployment — not just assumed from reading the docs.
 
-- **Help and Support:**
-    - Comprehensive user guide and FAQs.
-    - In-app tooltips for guidance.
-    - Customer support via email and chat.
+## Styling
 
-## Non-Functional Requirements
+Visual language (not code/components) borrowed from the Vitrag (`vitrag-6`) design system: navy `#384764` + teal `#00a99e` palette, sharp/square corners throughout (`border-radius: 0`, no rounded corners anywhere), uppercase tracking-wide bold labels/buttons, Source Sans Pro. Applied as a plain CSS override block (`vitrag_theme()` in `ui.R`) layered on top of Shiny's default Bootstrap 3, not a full theming package swap. The disconnect banner deliberately keeps its own red-alert styling rather than reskinning to the brand palette — the point of that banner is to look distinctly like a system-level warning, not blend into the normal UI chrome.
 
-- **Performance:**
-    - Fast processing of PDF tasks.
-    - Optimized for low and high-spec devices.
+## Run
 
-- **Security:**
-    - All PDF manipulations are processed locally.
-    - No data storage or transmission to external servers.
-    - Regular security updates and patches.
+`shiny::runApp()` from this directory. Needs `pdftk` on `PATH` in addition to the R packages below.
 
-- **Accessibility:**
-    - Adherence to WCAG 2.1 standards.
-    - Screen reader compatibility.
-    - Keyboard navigation support.
+## Dependencies
 
-## Technical Architecture
+`shiny, qpdf, pdftools` (R packages) + `pdftk` (system binary, `pdftk-java` on Debian/Ubuntu, needs a JRE).
 
-- **Frontend:**
-    - Built with HTML5, CSS3, and JavaScript.
-    - Frameworks like React or Vue.js for dynamic content.
+## Deployment
 
-- **Backend:**
-    - Integration with PDFTK library for PDF manipulation.
-    - Node.js or Python for backend logic.
-    - Local storage for temporary file handling.
-
-- **Distribution:**
-    - Desktop application packaged with Electron or similar.
-    - Mobile application developed with React Native or Flutter (if applicable).
-
-- **Testing:**
-    - Unit tests for each functional component.
-    - Integration tests for end-to-end workflows.
-    - User acceptance testing with varied user groups.
-
-## Scalability and Maintenance
-
-- **Updates:**
-    - Regular updates for new features and bug fixes.
-    - Auto-update functionality in the app.
-
-- **Scalability:**
-    - Designed to handle an increasing number of users and data volume.
-
-- **Monitoring and Logging:**
-    - Error logging and diagnostic tools for prompt issue resolution.
-
-## Motivation for Users to Switch
-
-- **Data Privacy and Security:** Unlike online tools, this application processes all files locally, eliminating the risk of data breaches and unauthorized access to sensitive information.
-
-- **No Internet Dependency:** Users can manipulate PDF files without an internet connection, making it ideal for secure environments or areas with poor connectivity.
-
-- **Cost-Effective:** Offers a free or low-cost alternative to expensive commercial PDF software, reducing financial barriers for users.
-
-- **Customization and Flexibility:** Users can tailor the application to their specific needs, benefiting from a wider range of features than most online tools.
-
-- **No File Size Limits:** Users can work with large PDF files without worrying about the upload limits imposed by online services.
-
-- **Community Support:** Access to a community of users and developers for troubleshooting, tips, and shared knowledge.
-
-- **Eco-Friendly:** Reduces the carbon footprint by avoiding server use and data storage, promoting sustainable software usage. 
-
-This application aims to empower users by providing a secure, efficient, and user-friendly tool for managing their PDF files while ensuring data privacy and promoting digital sustainability.
+Docker + Railway + Basic Auth, same pattern as the other three apps — `nginx.conf.template`/`start.sh`/Dockerfile all follow the established template. Ships with the disconnect banner from the first deploy (added retroactively to the other three apps after the fact; this one starts with it).
