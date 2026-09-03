@@ -18,9 +18,26 @@ All 12 core operations (merge, parse-page-range edge cases, extract, delete-via-
 
 Visual language (not code/components) borrowed from the Vitrag (`vitrag-6`) design system: navy `#384764` + teal `#00a99e` palette, sharp/square corners throughout (`border-radius: 0`, no rounded corners anywhere), uppercase tracking-wide bold labels/buttons, Source Sans Pro. Applied as a plain CSS override block (`vitrag_theme()` in `ui.R`) layered on top of Shiny's default Bootstrap 3, not a full theming package swap. The disconnect banner deliberately keeps its own red-alert styling rather than reskinning to the brand palette — the point of that banner is to look distinctly like a system-level warning, not blend into the normal UI chrome.
 
+## Local fallback CLI
+
+All six tabs' logic lives in `pdftk_core.R`, sourced by `server.R` — not duplicated. That file is also directly runnable, for a PDF too large/sensitive to upload, or to debug a failure with a real R console instead of whatever `showNotification` surfaces:
+```
+Rscript pdftk_core.R merge out.pdf in1.pdf in2.pdf [more.pdf ...]
+Rscript pdftk_core.R pages <keep|delete> in.pdf "1-3,5" out.pdf
+Rscript pdftk_core.R rotate in.pdf "1-3,5" 90 out.pdf
+Rscript pdftk_core.R compress in.pdf out.pdf [--linearize]
+Rscript pdftk_core.R encrypt in.pdf <password> out.pdf
+Rscript pdftk_core.R decrypt in.pdf <password> out.pdf
+Rscript pdftk_core.R metadata-read in.pdf
+Rscript pdftk_core.R metadata-write in.pdf out.pdf [--title T] [--author A] [--subject S] [--keywords K]
+```
+All 8 subcommands verified locally against real generated test PDFs (including the wrong-password decrypt failure path), and the refactored Shiny app re-verified end-to-end via Playwright across all 6 tabs, before deploying.
+
+The CLI-invocation guard checks that `pdftk_core.R` was the literal `Rscript` target (via `commandArgs`'s `--file=`) rather than `!interactive()` — the deployed app also runs non-interactively when it sources this file, so an `!interactive()`-based guard would fire `quit()` from inside the live server the moment it started.
+
 ## Run
 
-`shiny::runApp()` from this directory. Needs `pdftk` on `PATH` in addition to the R packages below.
+`shiny::runApp()` from this directory. Needs `pdftk` on `PATH` in addition to the R packages below. Upload cap is 200MB (`shiny.maxRequestSize` in `server.R`, matched by `client_max_body_size 200M` in `nginx.conf.template` — nginx's own default of 1MB sits in front of Shiny and silently 413s anything larger unless both are raised together).
 
 ## Dependencies
 
