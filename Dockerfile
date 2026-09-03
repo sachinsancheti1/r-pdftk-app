@@ -32,7 +32,7 @@ RUN Rscript -e "install.packages('rlang', repos='https://packagemanager.posit.co
 # packages in the list failed, so verify explicitly and fail the build
 # loudly (by name) if anything didn't actually land.
 RUN Rscript -e "install.packages(c('shiny','qpdf','pdftools','zip','httr2','base64enc','openxlsx','officer'), repos='https://packagemanager.posit.co/cran/__linux__/jammy/latest')"
-RUN Rscript -e "pkgs <- c('shiny','qpdf','pdftools','zip','httr2','base64enc','openxlsx','officer'); missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly=TRUE)]; if (length(missing) > 0) { cat('FAILED to install R package(s):', paste(missing, collapse=', '), '\n'); quit(status=1) }"
+RUN Rscript -e "pkgs <- c('shiny','qpdf','pdftools','zip','httr2','base64enc','openxlsx','officer'); ok <- TRUE; for (p in pkgs) { r <- tryCatch({ library(p, character.only=TRUE); TRUE }, error = function(e) { cat('FAILED to load', p, '-', conditionMessage(e), '\n'); FALSE }); if (!r) ok <- FALSE }; if (!ok) quit(status=1)"
 
 WORKDIR /app
 COPY ui.R /app/ui.R
