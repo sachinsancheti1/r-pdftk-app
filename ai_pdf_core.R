@@ -133,7 +133,10 @@ call_claude_extract <- function(pdf_path, hint = "") {
     ))
   }
   n_pages <- pdf_page_count(pdf_path)
-  if (is.finite(n_pages) && n_pages > MAX_PDF_PAGES) {
+  if (!is.finite(n_pages)) {
+    stop("Couldn't read this PDF - is it a valid, unencrypted file?")
+  }
+  if (n_pages > MAX_PDF_PAGES) {
     stop(sprintf(
       "This PDF has %d pages, over the %d-page limit for AI conversion in one request. Try the Extract/Delete Pages tab to split it first.",
       n_pages, MAX_PDF_PAGES
@@ -184,6 +187,19 @@ call_claude_extract <- function(pdf_path, hint = "") {
   if (status != 200) {
     msg <- if (!is.null(body$error$message)) body$error$message else paste("HTTP", status)
     stop("Claude API error: ", msg)
+  }
+
+  # A response cut off by the max_tokens budget mid-way through the tool
+  # call's JSON would otherwise surface as a generic, misleading "found no
+  # tabular data" error from op_ai_to_excel/op_ai_to_word once the missing
+  # keys are (correctly, but unhelpfully) treated as empty - this document
+  # isn't actually short on content, the response just didn't finish.
+  if (identical(body$stop_reason, "max_tokens")) {
+    stop(paste(
+      "This document has more content than fits in one AI response and",
+      "got cut off partway through. Try the Extract/Delete Pages tab to",
+      "split it into smaller pieces first."
+    ))
   }
 
   tool_blocks <- Filter(function(b) identical(b$type, "tool_use"), body$content)

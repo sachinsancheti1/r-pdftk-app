@@ -125,6 +125,15 @@ op_metadata_write <- function(file, title = "", author = "", subject = "", keywo
 op_pdf_to_images <- function(file, pages_str = "", dpi = 150, out_dir) {
   n <- pdf_page_count(file)
   if (!is.finite(n)) stop("Couldn't read this PDF - is it a valid, unencrypted file?")
+  # dpi=NA throws an unhelpful "Failed to save file..." error from
+  # pdftools; dpi=0 doesn't error at all but silently writes a useless
+  # near-empty image (confirmed locally: a 631-byte garbage JPEG, no
+  # warning). Both need a real check rather than trusting pdf_convert()'s
+  # own error handling for this.
+  dpi <- suppressWarnings(as.numeric(dpi))
+  if (!is.finite(dpi) || dpi < 50 || dpi > 600) {
+    stop("Enter a resolution between 50 and 600 DPI.")
+  }
   parsed <- if (trimws(pages_str) == "") seq_len(n) else parse_page_range(pages_str, n)
   if (is.character(parsed)) stop(parsed)
   if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
