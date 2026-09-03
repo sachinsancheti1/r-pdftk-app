@@ -189,6 +189,25 @@ vitrag_theme <- function() {
           border-color: var(--vgreen-dark);
           color: #ffffff;
         }
+        /* Positive/add actions get the teal instead of navy - still
+           sharp-cornered/uppercase/bold like every other button. */
+        .btn-success {
+          border-radius: 0;
+          border: 2px solid var(--vgreen-dark);
+          background: var(--vgreen-dark);
+          color: #ffffff;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+          font-size: 15px;
+          padding: 10px 24px;
+          transition: all 0.15s ease;
+        }
+        .btn-success:hover {
+          background: var(--vblue);
+          border-color: var(--vblue);
+          color: #ffffff;
+        }
 
         /* Radio/checkbox accent color. */
         input[type='radio'], input[type='checkbox'] { accent-color: var(--vgreen); }
