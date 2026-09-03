@@ -14,6 +14,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN rm -f /etc/nginx/sites-enabled/default
 
+# officer needs rlang >= 1.1.7 at load time (a NAMESPACE-level check, not
+# just a DESCRIPTION Depends bound); the base image's preinstalled rlang
+# predates that, and install.packages() below doesn't force an upgrade of
+# an already-satisfied-looking dependency. Confirmed by a real build
+# failure (officer installed as a binary, then failed requireNamespace()
+# with "namespace 'rlang' 1.1.6 is being loaded, but >= 1.1.7 is
+# required") before this explicit upgrade step was added.
+RUN Rscript -e "install.packages('rlang', repos='https://packagemanager.posit.co/cran/__linux__/jammy/latest')"
+
 # Posit Package Manager's Linux binary mirror (jammy = Ubuntu 22.04, which
 # rocker/r-ver:4.4.1 is based on) installs pre-built binaries instead of
 # compiling from source - including officer's font-rendering deps
