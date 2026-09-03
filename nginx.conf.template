@@ -1,6 +1,13 @@
 server {
     listen ${PORT};
     server_name _;
+    # nginx's own default (1MB) is far below what a real upload here needs
+    # (real-world PDFs routinely exceed 1MB) and silently 413s anything
+    # larger before Shiny's own shiny.maxRequestSize even comes into play.
+    # Railway itself has no platform-level body size cap - the binding
+    # constraint there is a 5-minute upload completion window, comfortable
+    # for a file this size on any normal connection.
+    client_max_body_size 200M;
 
     location / {
         auth_basic "Restricted";

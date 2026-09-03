@@ -3,6 +3,13 @@ library(shiny)
 library(qpdf)
 library(pdftools)
 
+# Default Shiny upload cap is 5MB; real-world PDFs (scanned drawings,
+# multi-page documents) routinely exceed that. Matches nginx's
+# client_max_body_size (200M) in nginx.conf.template - nginx's own default
+# (1MB) sits in front of this and would 413 anything larger before Shiny
+# ever saw it, so both had to move together.
+options(shiny.maxRequestSize = 200 * 1024^2)
+
 # Merge, extract/delete pages, rotate, and compress all go through the
 # `qpdf` R package - it binds directly to libqpdf (no subprocess, no JVM),
 # unlike shelling out to a pdftk/qpdf CLI. Confirmed via its full CRAN
