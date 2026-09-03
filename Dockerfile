@@ -25,6 +25,7 @@ RUN Rscript -e "pkgs <- c('shiny','qpdf','pdftools'); missing <- pkgs[!vapply(pk
 WORKDIR /app
 COPY ui.R /app/ui.R
 COPY server.R /app/server.R
+COPY pdftk_core.R /app/pdftk_core.R
 
 RUN mkdir -p /etc/nginx/templates
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
