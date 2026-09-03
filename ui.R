@@ -83,9 +83,19 @@ vitrag_theme <- function() {
         :root {
           --vblue: #384764;
           --vgreen: #00a99e;
-          --vgreen-dark: #00786f;
+          /* vitrag-6's source gives no hex for this one (only
+             oklch(0.42 0.09 180)) - precisely computed via the culori
+             library rather than eyeballed; an earlier guess (#00786f)
+             was visibly off. */
+          --vgreen-dark: #005c4f;
           --vorange: #ff7824;
           --vsection: #f2f5f9;
+          /* vitrag's --border: oklch(0.91 0 0) and --muted-foreground:
+             oklch(0.42 0.04 257), both precisely computed rather than
+             guessed (form-control border was a hand-picked #c7ccd6
+             before, unrelated to any real vitrag token). */
+          --vborder: #e1e1e1;
+          --vmuted: #3f4e63;
         }
         body {
           font-family: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif;
@@ -99,6 +109,7 @@ vitrag_theme <- function() {
            a relative shrink. */
         small, .help-block {
           font-size: 13px;
+          color: var(--vmuted);
         }
         h1, h2, h3, h4, h5, legend {
           font-family: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif;
@@ -160,7 +171,7 @@ vitrag_theme <- function() {
         }
         .form-control {
           border-radius: 0;
-          border: 1px solid #c7ccd6;
+          border: 1px solid var(--vborder);
           font-size: 15px;
           height: auto;
           padding: 8px 12px;
