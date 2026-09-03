@@ -4,12 +4,16 @@ FROM rocker/r-ver:4.4.1
 # pdftk-java (the actual "pdftk" binary on modern Ubuntu - the classic C++
 # pdftk was dropped from Debian/Ubuntu; pdftk-java is a command-line
 # compatible Java port, needs a headless JRE) + libjpeg/poppler dev headers
-# for the qpdf and pdftools R packages respectively.
+# for the qpdf and pdftools R packages respectively + libwebp for ragg (an
+# officer font-rendering dependency) - Posit's binary R packages are
+# usually statically linked against their system deps, but ragg isn't for
+# libwebp: confirmed via a real build failure (`ragg.so`: "libwebpmux.so.3:
+# cannot open shared object file") before this was added.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libcurl4-openssl-dev libssl-dev libxml2-dev zlib1g-dev \
     nginx apache2-utils gettext-base \
     pdftk-java default-jre-headless \
-    libjpeg-dev libpoppler-cpp-dev \
+    libjpeg-dev libpoppler-cpp-dev libwebp-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rm -f /etc/nginx/sites-enabled/default
