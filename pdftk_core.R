@@ -1,17 +1,18 @@
-# pdftk_core.R - the actual merge/extract/rotate/compress/encrypt/metadata
-# logic, usable two ways:
+# pdftk_core.R - the actual merge/extract/rotate/compress/encrypt/metadata/
+# images logic, usable two ways:
 #   1. sourced by server.R (the deployed Shiny app calls these functions
 #      directly - no duplicated logic between the app and this file)
 #   2. run directly via `Rscript pdftk_core.R <command> ...` when a file is
 #      too large/sensitive to upload, or a failure needs local debugging
 #      the deployed container doesn't give you (no R console, no
 #      traceback beyond what showNotification surfaces).
-# Same install needed either way: R + the qpdf and pdftools packages, plus
-# pdftk on PATH for encrypt/decrypt/metadata (see README).
+# Same install needed either way: R + the qpdf, pdftools and zip packages,
+# plus pdftk on PATH for encrypt/decrypt/metadata (see README).
 
 suppressMessages({
   library(qpdf)
   library(pdftools)
+  library(zip)
 })
 
 run_pdftk <- function(args) {
@@ -117,6 +118,36 @@ op_metadata_write <- function(file, title = "", author = "", subject = "", keywo
   invisible(output)
 }
 
+# Renders selected pages to JPEG files in out_dir, one file per page.
+# Returns the file paths (in page order) rather than a single output - the
+# caller decides whether to hand back one file or zip several, since that
+# varies by call site (Shiny vs CLI).
+op_pdf_to_images <- function(file, pages_str = "", dpi = 150, out_dir) {
+  n <- pdf_page_count(file)
+  if (!is.finite(n)) stop("Couldn't read this PDF - is it a valid, unencrypted file?")
+  parsed <- if (trimws(pages_str) == "") seq_len(n) else parse_page_range(pages_str, n)
+  if (is.character(parsed)) stop(parsed)
+  if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+  base <- tools::file_path_sans_ext(basename(file))
+  out_files <- file.path(out_dir, sprintf("%s_page%03d.jpg", base, parsed))
+  pdftools::pdf_convert(file, format = "jpeg", pages = parsed, dpi = dpi,
+                         filenames = out_files, verbose = FALSE)
+  out_files
+}
+
+# op_pdf_to_images() + zip. Always zips (even for a single page) so the CLI
+# and the Shiny download handler share one return shape; the Shiny side is
+# free to skip the zip step itself and hand back the lone file directly
+# when there's only one page, for a nicer single-file download.
+op_pdf_to_images_zip <- function(file, pages_str, dpi, zip_path) {
+  img_dir <- tempfile()
+  dir.create(img_dir, recursive = TRUE)
+  on.exit(unlink(img_dir, recursive = TRUE, force = TRUE))
+  out_files <- op_pdf_to_images(file, pages_str, dpi, img_dir)
+  zip::zipr(zip_path, files = out_files, root = img_dir)
+  invisible(zip_path)
+}
+
 # ---- CLI ----
 
 .pdftk_core_cli <- function(argv) {
@@ -132,11 +163,17 @@ op_metadata_write <- function(file, title = "", author = "", subject = "", keywo
       "  decrypt <in.pdf> <password> <out.pdf>\n",
       "  metadata-read <in.pdf>\n",
       "  metadata-write <in.pdf> <out.pdf> [--title T] [--author A] [--subject S] [--keywords K]\n",
+      "  images <in.pdf> <out.zip> [--pages 1-3,5 (blank = all)] [--dpi 150]\n",
       sep = ""
     )
   }
   if (length(argv) == 0) { usage(); quit(status = 1) }
   cmd <- argv[1]; rest <- argv[-1]
+
+  get_flag <- function(name, default = "") {
+    i <- match(paste0("--", name), rest)
+    if (is.na(i) || i == length(rest)) default else rest[i + 1]
+  }
 
   result <- tryCatch({
     switch(cmd,
@@ -148,13 +185,11 @@ op_metadata_write <- function(file, title = "", author = "", subject = "", keywo
       "decrypt" = op_crypt(rest[1], mode = "decrypt", password = rest[2], output = rest[3]),
       "metadata-read" = { print(op_metadata_read(rest[1])); invisible(NULL) },
       "metadata-write" = {
-        get_flag <- function(name, default = "") {
-          i <- match(paste0("--", name), rest)
-          if (is.na(i) || i == length(rest)) default else rest[i + 1]
-        }
         op_metadata_write(rest[1], title = get_flag("title"), author = get_flag("author"),
                            subject = get_flag("subject"), keywords = get_flag("keywords"), output = rest[2])
       },
+      "images" = op_pdf_to_images_zip(rest[1], get_flag("pages", ""),
+                                       as.numeric(get_flag("dpi", "150")), rest[2]),
       { usage(); quit(status = 1) }
     )
   }, error = function(e) {

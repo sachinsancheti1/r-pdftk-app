@@ -10,12 +10,18 @@ library(pdftools)
 # ever saw it, so both had to move together.
 options(shiny.maxRequestSize = 200 * 1024^2)
 
-# The actual merge/extract/rotate/compress/encrypt/metadata logic lives in
-# pdftk_core.R, not duplicated here - it's also directly runnable as a CLI
-# (`Rscript pdftk_core.R ...`) for a file too large/sensitive to upload, or
-# to debug a failure locally with a real R console instead of just
-# whatever showNotification surfaces. See README.
+# The actual merge/extract/rotate/compress/encrypt/metadata/images logic
+# lives in pdftk_core.R, not duplicated here - it's also directly runnable
+# as a CLI (`Rscript pdftk_core.R ...`) for a file too large/sensitive to
+# upload, or to debug a failure locally with a real R console instead of
+# just whatever showNotification surfaces. See README.
 source("pdftk_core.R")
+
+# AI-assisted PDF -> Excel/Word (Claude's native PDF support) lives in
+# ai_pdf_core.R, same sourced+CLI-runnable pattern. Needs ANTHROPIC_API_KEY
+# set in the environment - degrades with a clear in-app error, not a
+# crash, when it's missing.
+source("ai_pdf_core.R")
 
 shinyServer(function(input, output, session) {
 
@@ -121,6 +127,64 @@ shinyServer(function(input, output, session) {
         subject = input$meta_subject, keywords = input$meta_keywords,
         output = file
       ))
+    }
+  )
+
+  # ---- PDF to Images ----
+  images_total <- reactive({
+    req(input$images_file)
+    pdf_page_count(input$images_file$datapath)
+  })
+
+  output$images_info <- renderUI({
+    req(input$images_file)
+    n <- images_total()
+    tags$p(tags$small(sprintf("%d page(s) in this document.", n)))
+  })
+
+  # Best-effort resolved page list, used only to decide the download
+  # filename (single .jpg vs .zip) - an invalid range just falls through
+  # to the .zip branch, whose real error comes from op_pdf_to_images_zip()
+  # re-parsing the range for real and throwing the precise message.
+  images_resolved_pages <- reactive({
+    req(input$images_file)
+    n <- images_total()
+    if (!is.finite(n)) return(integer(0))
+    range_str <- trimws(input$images_range)
+    parsed <- if (range_str == "") seq_len(n) else parse_page_range(range_str, n)
+    if (is.character(parsed)) integer(0) else parsed
+  })
+
+  output$images_download <- downloadHandler(
+    filename = function() if (length(images_resolved_pages()) == 1) "page.jpg" else "pages.zip",
+    content = function(file) {
+      req(input$images_file)
+      if (length(images_resolved_pages()) == 1) {
+        run_op({
+          img_dir <- tempfile()
+          dir.create(img_dir, recursive = TRUE)
+          on.exit(unlink(img_dir, recursive = TRUE, force = TRUE))
+          out <- op_pdf_to_images(input$images_file$datapath, input$images_range, input$images_dpi, img_dir)
+          file.copy(out[1], file, overwrite = TRUE)
+        })
+      } else {
+        run_op(op_pdf_to_images_zip(input$images_file$datapath, input$images_range, input$images_dpi, file))
+      }
+    }
+  )
+
+  # ---- AI: PDF to Excel/Word ----
+  output$ai_download <- downloadHandler(
+    filename = function() {
+      fmts <- input$ai_formats
+      if (length(fmts) == 1) paste0("converted.", if (fmts == "excel") "xlsx" else "docx") else "converted.zip"
+    },
+    content = function(file) {
+      req(input$ai_file)
+      validate(need(length(input$ai_formats) > 0, "Select at least one output format."))
+      withProgress(message = "Asking Claude to read the PDF...", value = 0.3, {
+        run_op(op_ai_convert_zip(input$ai_file$datapath, input$ai_formats, file, hint = input$ai_hint))
+      })
     }
   )
 })

@@ -333,6 +333,47 @@ shinyUI(fluidPage(
           tags$p(tags$small("Uploading a file pre-fills the fields below with its current metadata, if any."))
         )
       )
+    ),
+
+    tabPanel("PDF to Images",
+      br(),
+      sidebarLayout(
+        sidebarPanel(
+          fileInput("images_file", "PDF file", accept = ".pdf"),
+          uiOutput("images_info"),
+          textInput("images_range", "Pages (e.g. 1-3,5, or leave blank for all)", value = ""),
+          numericInput("images_dpi", "Resolution (DPI)", value = 150, min = 50, max = 600, step = 25),
+          downloadButton("images_download", "Convert & Download")
+        ),
+        mainPanel(
+          tags$p("Render each page as a JPEG image."),
+          tags$p(tags$small("A single selected page downloads directly as a .jpg; multiple pages download as a .zip."))
+        )
+      )
+    ),
+
+    tabPanel("AI: PDF to Excel/Word",
+      br(),
+      sidebarLayout(
+        sidebarPanel(
+          fileInput("ai_file", "PDF file", accept = ".pdf"),
+          checkboxGroupInput(
+            "ai_formats", "Convert to",
+            choices = c("Excel (.xlsx)" = "excel", "Word (.docx)" = "word"),
+            selected = c("excel", "word")
+          ),
+          textAreaInput("ai_hint", "Anything that helps Claude read it correctly? (optional)",
+                        placeholder = "e.g. \"this is a bill of quantities, ignore the header/footer on every page\"",
+                        rows = 3),
+          downloadButton("ai_download", "Convert with Claude & Download")
+        ),
+        mainPanel(
+          tags$p("Sends the PDF to Claude (Anthropic's AI), which reads both the page images and any embedded text to extract tables and document structure - genuinely useful for scanned or irregularly laid-out documents, not just clean digital PDFs."),
+          tags$p(tags$small("AI-extracted content can be wrong, especially for dense/low-quality scans - always spot-check the result against the source before relying on it.")),
+          tags$p(tags$small("Limits: 20MB and 100 pages per PDF. Larger files need to be split first (see the Extract/Delete Pages tab).")),
+          tags$p(tags$small("Uses the ANTHROPIC_API_KEY configured on this server - each conversion is a paid API call."))
+        )
+      )
     )
   )
 ))

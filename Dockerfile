@@ -16,16 +16,20 @@ RUN rm -f /etc/nginx/sites-enabled/default
 
 # Posit Package Manager's Linux binary mirror (jammy = Ubuntu 22.04, which
 # rocker/r-ver:4.4.1 is based on) installs pre-built binaries instead of
-# compiling from source. install.packages() doesn't make R exit non-zero
-# just because some packages in the list failed, so verify explicitly and
-# fail the build loudly (by name) if anything didn't actually land.
-RUN Rscript -e "install.packages(c('shiny','qpdf','pdftools'), repos='https://packagemanager.posit.co/cran/__linux__/jammy/latest')"
-RUN Rscript -e "pkgs <- c('shiny','qpdf','pdftools'); missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly=TRUE)]; if (length(missing) > 0) { cat('FAILED to install R package(s):', paste(missing, collapse=', '), '\n'); quit(status=1) }"
+# compiling from source - including officer's font-rendering deps
+# (systemfonts/textshaping/ragg), which Posit's binaries ship statically
+# linked, avoiding a separate apt-get for freetype/fontconfig/harfbuzz.
+# install.packages() doesn't make R exit non-zero just because some
+# packages in the list failed, so verify explicitly and fail the build
+# loudly (by name) if anything didn't actually land.
+RUN Rscript -e "install.packages(c('shiny','qpdf','pdftools','zip','httr2','base64enc','openxlsx','officer'), repos='https://packagemanager.posit.co/cran/__linux__/jammy/latest')"
+RUN Rscript -e "pkgs <- c('shiny','qpdf','pdftools','zip','httr2','base64enc','openxlsx','officer'); missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly=TRUE)]; if (length(missing) > 0) { cat('FAILED to install R package(s):', paste(missing, collapse=', '), '\n'); quit(status=1) }"
 
 WORKDIR /app
 COPY ui.R /app/ui.R
 COPY server.R /app/server.R
 COPY pdftk_core.R /app/pdftk_core.R
+COPY ai_pdf_core.R /app/ai_pdf_core.R
 
 RUN mkdir -p /etc/nginx/templates
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
