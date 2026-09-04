@@ -1,6 +1,6 @@
 # r-pdftk-app
 
-Shiny app: merge, extract/delete pages, rotate, compress, encrypt/decrypt, edit metadata, and render pages to JPEG on PDFs — all processed on this server, nothing sent to a third-party PDF site (the AI tab is the one deliberate exception - see below). Started from a generic product spec (`pdftk application.md`, since superseded by this README) describing a much larger cross-platform/public-product scope (Electron desktop, mobile apps, localization, WCAG compliance, community support); this build is deliberately scoped to a private tool for personal/internal use instead, matching `r-contour-analysis`/`r-paint-selection`/`RmdFormatsHub`.
+Shiny app: merge, extract/delete pages, rotate, compress, encrypt/decrypt, edit metadata, and render pages to JPEG on PDFs — all processed on this server, nothing sent to a third-party PDF site (the AI tab is the one deliberate exception - see below). Started from a generic product spec (`pdftk application.md`, since superseded by this README) describing a much larger cross-platform/public-product scope (Electron desktop, mobile apps, localization, WCAG compliance, community support); this build is deliberately scoped to a private tool for personal/internal use instead, matching `r-contour-analysis`/`r-paint-selection`/`r-rmd-converter`.
 
 ## Architecture: hybrid `qpdf` + `pdftk`, not just "shell out to pdftk"
 
