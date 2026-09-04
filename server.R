@@ -25,13 +25,36 @@ source("ai_pdf_core.R")
 
 shinyServer(function(input, output, session) {
 
+  # shiny::validate()/need() only ever surfaces to the user when its call
+  # stack bottoms out in a render*() output - inside a downloadHandler()'s
+  # content function (every download in this app), the exact same call
+  # still throws (the same silent "shiny.silent.error" condition), but
+  # there's no output context to catch and display it, so the handler just
+  # stops with no visible sign anything happened - the browser still
+  # attempts a download and gets back nothing usable. Confirmed live: this
+  # is exactly the bug reported for Merge with only one file selected -
+  # download fires, gets silently cancelled, zero notification shown. This
+  # was the ORIGINAL form of `run_op()` (and two other call sites in this
+  # file) before this fix - every real error in every one of this app's 9
+  # downloadHandlers had the same silent-failure bug, not just Merge.
+  # notify_stop() is the correct replacement anywhere outside a render*()
+  # body: show the message for real, then req(FALSE) to halt (req()'s own
+  # silent stop is fine here since the explicit showNotification() already
+  # fired) - confirmed this actually prevents the browser from attempting
+  # a download at all, not just suppressing the notification.
+  notify_stop <- function(cond, msg) {
+    if (!isTRUE(cond)) {
+      showNotification(msg, type = "error", duration = NULL)
+      req(FALSE)
+    }
+  }
+
   # pdftk_core.R's op_* functions just stop() on error - wrapped here so
   # the message actually reaches the user (Shiny's default error
   # sanitization can otherwise reduce it to a generic "An error occurred"
-  # in some deployment contexts) via the same validate(need(...)) pattern
-  # every other error in this app already uses.
+  # in some deployment contexts).
   run_op <- function(expr) {
-    tryCatch(expr, error = function(e) validate(need(FALSE, conditionMessage(e))))
+    tryCatch(expr, error = function(e) notify_stop(FALSE, conditionMessage(e)))
   }
 
   # ---- Merge ----
@@ -43,7 +66,7 @@ shinyServer(function(input, output, session) {
   output$merge_download <- downloadHandler(
     filename = function() "merged.pdf",
     content = function(file) {
-      validate(need(nrow(input$merge_files) >= 2, "Select at least two PDF files to merge."))
+      notify_stop(!is.null(input$merge_files) && nrow(input$merge_files) >= 2, "Select at least two PDF files to merge.")
       run_op(op_merge(input$merge_files$datapath, output = file))
     }
   )
@@ -93,7 +116,7 @@ shinyServer(function(input, output, session) {
     filename = function() "compressed.pdf",
     content = function(file) {
       req(input$compress_file)
-      run_op(op_compress(input$compress_file$datapath, output = file, linearize = input$compress_linearize))
+      run_op(op_compress(input$compress_file$datapath, output = file, level = input$compress_level, linearize = input$compress_linearize))
     }
   )
 
@@ -181,7 +204,7 @@ shinyServer(function(input, output, session) {
     },
     content = function(file) {
       req(input$ai_file)
-      validate(need(length(input$ai_formats) > 0, "Select at least one output format."))
+      notify_stop(length(input$ai_formats) > 0, "Select at least one output format.")
       withProgress(message = "Asking Claude to read the PDF...", value = 0.3, {
         run_op(op_ai_convert_zip(input$ai_file$datapath, input$ai_formats, file, hint = input$ai_hint))
       })

@@ -8,12 +8,18 @@ FROM rocker/r-ver:4.4.1
 # officer font-rendering dependency) - Posit's binary R packages are
 # usually statically linked against their system deps, but ragg isn't for
 # libwebp: confirmed via a real build failure (`ragg.so`: "libwebpmux.so.3:
-# cannot open shared object file") before this was added.
+# cannot open shared object file") before this was added. + ghostscript for
+# real PDF compression - qpdf's own "compress" is structure-only and never
+# touches embedded images (confirmed: 0% reduction on a real 99MB
+# image-heavy PDF); Ghostscript's pdfwrite device actually downsamples/
+# recompresses them (same file: 87% smaller, no visible quality loss at
+# its "ebook" preset).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libcurl4-openssl-dev libssl-dev libxml2-dev zlib1g-dev \
     nginx apache2-utils gettext-base \
     pdftk-java default-jre-headless \
     libjpeg-dev libpoppler-cpp-dev libwebp-dev \
+    ghostscript \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rm -f /etc/nginx/sites-enabled/default

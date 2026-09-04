@@ -6,13 +6,18 @@ Shiny app: merge, extract/delete pages, rotate, compress, encrypt/decrypt, edit 
 
 Despite the app's name, most operations do **not** shell out to the `pdftk` CLI. Researched what's actually available in R before defaulting to a subprocess call:
 
-- **`qpdf`** (CRAN, binds directly to `libqpdf` via Rcpp — no subprocess, no JVM) handles **Merge, Extract/Delete pages, Rotate, and Compress** (`pdf_combine`/`pdf_subset`/`pdf_rotate_pages`/`pdf_compress`). Confirmed against the package's complete function reference (`pdf_length`, `pdf_split`, `pdf_subset`, `pdf_combine`, `pdf_compress`, `pdf_overlay_stamp`, `pdf_rotate_pages` — nothing else exists) that it has **no encryption and no metadata support at all**.
+- **`qpdf`** (CRAN, binds directly to `libqpdf` via Rcpp — no subprocess, no JVM) handles **Merge, Extract/Delete pages, and Rotate** (`pdf_combine`/`pdf_subset`/`pdf_rotate_pages`), and is the **"Lossless only" Compress option** (`pdf_compress`). Confirmed against the package's complete function reference (`pdf_length`, `pdf_split`, `pdf_subset`, `pdf_combine`, `pdf_compress`, `pdf_overlay_stamp`, `pdf_rotate_pages` — nothing else exists) that it has **no encryption and no metadata support at all**.
 - **`pdftools`** (already a near-universal R PDF dependency) provides page counts (`pdf_length` — actually via `qpdf::pdf_length`, `pdftools` used for `pdf_info()`) and metadata **reading** (`pdf_info(path)$keys$Title` etc.) — no subprocess needed for this either.
 - **`pdftk` (CLI, shelled via `system2()`)** is used only for **Encrypt/Decrypt** and **metadata writing** — the two things neither `qpdf` nor `pdftools` can do. Checked whether `xmpdf` (an R package that looked like it might fill this gap natively) was a better option first — its own `SystemRequirements` say it just shells out to `exiftool`/`ghostscript`/`pdftk` under the hood anyway, so it wouldn't have actually removed the dependency, just added another wrapper package on top of it.
+- **`gs` (Ghostscript CLI, shelled via `system2()`)** is the **default Compress path** (all levels except "Lossless only"). `qpdf::pdf_compress()` is structure-only - it dedupes objects and recompresses streams, but never touches embedded images, which is where nearly all of a real-world PDF's size actually lives. Confirmed on a real 99MB image-heavy catalogue (`sample/`, gitignored - real content, not committed): `qpdf::pdf_compress()` produced a byte-identical file, 0% smaller. Ghostscript's `pdfwrite` device actually downsamples/recompresses images to a quality preset - the same file at `/ebook` (the app's default): 98.9MB → 12.3MB, 87% smaller, no visible quality loss at normal viewing size (rendered and compared page-by-page); `/screen` shrinks further but visibly softens text - offered, but not the default.
 
 On Ubuntu/Debian, classic `pdftk` was dropped from the repos — `pdftk-java` (a command-line-compatible Java port) is what's actually installed, needing `default-jre-headless`. The `pdftk` command name and argument syntax are unchanged, so the R code calling `system2("pdftk", ...)` didn't need to know or care about this.
 
+**A real `system2()` quoting bug found while testing Ghostscript, and fixed for `pdftk` too.** `system2(bin, args, ...)` does **not** reliably quote an `args` element containing a space on its own — confirmed live: an unquoted file path with a space (the sample catalogue's own real filename, "EVENPLUS CATALOGUE VOL-1.pdf") split into multiple argv tokens and Ghostscript errored on the fragment. Shiny's own upload `datapath` is always a spaceless temp filename, so this never showed up through the deployed UI - but the CLI-fallback path this file exists for (a PDF too large/sensitive to upload) routinely gets real filenames, which routinely have spaces. Fixed by wrapping every `args` element in `shQuote()` before both `run_pdftk()` and the new `run_ghostscript()` call `system2()` - the same pattern already used in the sibling `r-site-planning-toolkit`/`r-terrain-road` apps for their own Python subprocess calls, for the identical reason.
+
 All 12 core operations (merge, parse-page-range edge cases, extract, delete-via-inverse-selection, rotate, compress, encrypt, decrypt with a correct password, decrypt correctly *rejecting* a wrong password, metadata write-then-read round-trip) were verified locally against a real generated test PDF before deployment — not just assumed from reading the docs.
+
+**A real, app-wide bug found and fixed: every one of this app's 9 `downloadHandler`s was silently swallowing its own errors.** `shiny::validate()`/`need()` only ever surfaces to the user when its call stack bottoms out in a `render*()` output - inside a `downloadHandler()`'s `content` function (every download here), the exact same call still throws its `shiny.silent.error` condition, but there's no output context to catch and display it. The browser still attempts a download and gets back nothing usable, with zero visible sign anything went wrong. Reported directly: uploading only one file to Merge downloaded "some odd file" instead of a warning - reproduced exactly (a download event fires, then silently fails to save, no notification shown), traced to `run_op()`'s own `validate(need(FALSE, conditionMessage(e)))` (used by *every* downloadHandler in this app, not just Merge) plus two more direct `validate(need(...))` call sites (Merge's own file-count check, the AI tab's format-selection check). Fixed with `notify_stop()` (`showNotification()` + `req(FALSE)`) - the same pattern already proven in the sibling `r-site-planning-toolkit`/`r-terrain-road` apps for the identical bug class - confirmed live for both a direct `notify_stop()` call and the `run_op()`-wrapped path: a real, readable error notification now shows, and the browser-side download is actually cancelled rather than "succeeding" with nothing in it.
 
 **PDF to Images** renders selected pages to JPEG via `pdftools::pdf_convert()` — the same poppler binding already used for page counts/metadata, so no new system dependency. A single selected page downloads directly as a `.jpg`; multiple pages zip together. Verified locally: non-contiguous page selection (`1,3`) renders exactly those two pages, not a contiguous range.
 
@@ -41,7 +46,7 @@ All eight tabs' logic lives in two sourced-not-duplicated files, each also direc
 Rscript pdftk_core.R merge out.pdf in1.pdf in2.pdf [more.pdf ...]
 Rscript pdftk_core.R pages <keep|delete> in.pdf "1-3,5" out.pdf
 Rscript pdftk_core.R rotate in.pdf "1-3,5" 90 out.pdf
-Rscript pdftk_core.R compress in.pdf out.pdf [--linearize]
+Rscript pdftk_core.R compress in.pdf out.pdf [--level screen|ebook|printer|prepress|lossless] [--linearize]
 Rscript pdftk_core.R encrypt in.pdf <password> out.pdf
 Rscript pdftk_core.R decrypt in.pdf <password> out.pdf
 Rscript pdftk_core.R metadata-read in.pdf
@@ -60,11 +65,11 @@ Both files' CLI-invocation guard checks that the file itself was the literal `Rs
 
 ## Run
 
-`shiny::runApp()` from this directory. Needs `pdftk` on `PATH` in addition to the R packages below, and `ANTHROPIC_API_KEY` set for the AI tab (optional - that tab alone degrades without it). Upload cap is 200MB (`shiny.maxRequestSize` in `server.R`, matched by `client_max_body_size 200M` in `nginx.conf.template` — nginx's own default of 1MB sits in front of Shiny and silently 413s anything larger unless both are raised together).
+`shiny::runApp()` from this directory. Needs `pdftk` and `gs`/`gswin64c` (Ghostscript) on `PATH` in addition to the R packages below, and `ANTHROPIC_API_KEY` set for the AI tab (optional - that tab alone degrades without it). Ghostscript's binary name differs by OS (`gs` on Linux/Mac, `gswin64c` on Windows) - `PDFTK_GS` overrides the OS-based default explicitly if needed. Upload cap is 200MB (`shiny.maxRequestSize` in `server.R`, matched by `client_max_body_size 200M` in `nginx.conf.template` — nginx's own default of 1MB sits in front of Shiny and silently 413s anything larger unless both are raised together).
 
 ## Dependencies
 
-`shiny, qpdf, pdftools, zip, httr2, base64enc, openxlsx, officer` (R packages) + `pdftk` (system binary, `pdftk-java` on Debian/Ubuntu, needs a JRE).
+`shiny, qpdf, pdftools, zip, httr2, base64enc, openxlsx, officer` (R packages) + `pdftk` (system binary, `pdftk-java` on Debian/Ubuntu, needs a JRE) + `ghostscript` (system binary, for real Compress).
 
 ## Deployment
 

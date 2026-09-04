@@ -2,3 +2,8 @@
 .RData
 .Rhistory
 desktop.ini
+
+# Real client PDF(s) used as local test material while validating
+# compression - not part of the shipped app, and not something to publish
+# even to a private repo.
+sample/
